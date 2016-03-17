@@ -1,4 +1,4 @@
-package swa.smartweatherapp;
+package swa.smartweatherapp.View;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -7,6 +7,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.view.Window;
 import android.view.WindowManager;
+
+import swa.smartweatherapp.R;
 
 public class SplashActivity extends Activity {
 
