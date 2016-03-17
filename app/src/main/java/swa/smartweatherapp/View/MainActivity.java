@@ -6,6 +6,7 @@ import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -14,12 +15,11 @@ import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
-import com.google.android.gms.common.api.GoogleApiClient;
 import com.survivingwithandroid.weather.lib.WeatherClient;
 import com.survivingwithandroid.weather.lib.WeatherConfig;
 import com.survivingwithandroid.weather.lib.exception.WeatherLibException;
-import com.survivingwithandroid.weather.lib.model.City;
 import com.survivingwithandroid.weather.lib.model.CurrentWeather;
 import com.survivingwithandroid.weather.lib.provider.openweathermap.OpenweathermapProviderType;
 import com.survivingwithandroid.weather.lib.request.WeatherRequest;
@@ -42,32 +42,28 @@ public class MainActivity extends Activity implements LocationListener{
     private Spinner spinner;
     private TextView locationView;
 
+    //Stores Geodata: longitude, latitude
     HashMap<String, Double> map = new HashMap<>();
 
 
     //Init variables
-    private int temperature = 0;
-    private String city = "default";
-    private String finalAddress;
-    private City cityObject;
-    private GoogleApiClient.Builder mGoogleApiClient;
+    private int temperature = 0;//default
+    private static int tmp; //temporary
+    private String finalAddress; //location
+    private boolean firstSelect=false; //deactivate onItemSelectedListener from beginning
 
     protected LocationManager locationManager;
-    protected LocationListener locationListener;
+    protected LocationListener locationListener; //not needed for now
     protected Location location;
+
     //Init WeatherClient
     // http://survivingwithandroid.github.io/WeatherLib/ check for more information
-    WeatherClient weatherclient = null;
+    WeatherClient weatherclient;
 
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-
-        //cityObject=(new City.CityBuilder()).name("Mannheim").build();
-
-        //Toast.makeText(this,cityObject.getName(),Toast.LENGTH_LONG).show();
 
         //Init layouts
         dateView = (TextView) findViewById(R.id.dateView);
@@ -75,21 +71,28 @@ public class MainActivity extends Activity implements LocationListener{
         cityBtn = (ImageButton) findViewById(R.id.changeCityBtn);
         locationView = (TextView) findViewById(R.id.locationView);
         spinner=(Spinner)findViewById(R.id.spinner);
-        spinner.setAdapter(new ArrayAdapter<String>(this, R.layout.spinner_item, Cities.getCityNames()));
+        spinner.setAdapter(new ArrayAdapter<>(this, R.layout.spinner_item, Cities.getCityNames()));
 
 
         //Configure Weatherlib
         initWeatherClient();
 
+        //Get weather of predefined enum citys
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if(firstSelect==true){
                 String selectedItem = parent.getItemAtPosition(position).toString();
                 map.put("Longitude", getCity(selectedItem).getLongitude());
                 map.put("Latitude", getCity(selectedItem).getLatitude());
-                getWeather();
+                new WeatherTask().execute();
+                //getWeather();
                 locationView.setText(getCity(selectedItem).getName());
                 tempView.setText(temperature + "°C ");
+                tempView.setVisibility(View.VISIBLE);
+                locationView.setVisibility(View.VISIBLE);
+                Toast.makeText(getApplicationContext(), getCity(selectedItem).getName() + " wurde ausgewählt. Die Koordinaten sind Long: " + getCity(selectedItem).getLongitude() + " Lat: " + getCity(selectedItem).getLatitude(), Toast.LENGTH_LONG).show();}
+                firstSelect=true;
             }
 
             @Override
@@ -98,24 +101,11 @@ public class MainActivity extends Activity implements LocationListener{
             }
                                           });
 
-                //Change current city through a button. Opens a dialog.
+        //Change current city through a button. Opens a dialog.
         cityBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 getLocalData();
-                /*final Dialog dialog = new Dialog(MainActivity.this, R.style.AlertDialogCustom);
-                dialog.getWindow().setGravity(Gravity.CENTER);
-                dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-                dialog.setContentView(R.layout.popup_changecity);
-                dialog.show();
-
-                Button acceptCity = (Button) dialog.findViewById(R.id.popupChangeCityBtn);
-                acceptCity.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        dialog.dismiss();
-                    }
-                });*/
                     }
                 });
 
@@ -135,6 +125,8 @@ public class MainActivity extends Activity implements LocationListener{
 
     }
 
+
+    //Uses the locationmanager to get local GPS Data and transforms them into an address with the geocoder.
     public void getLocalData(){
         locationManager = (LocationManager) this.getSystemService(LOCATION_SERVICE);
         if(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
@@ -142,6 +134,7 @@ public class MainActivity extends Activity implements LocationListener{
             location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             map.put("Longitude", location.getLongitude());
             map.put("Latitude", location.getLatitude());
+            new WeatherTask().execute();
             Geocoder geoCoder = new Geocoder(this, Locale.getDefault());
             StringBuilder builder = new StringBuilder();
             try {
@@ -159,9 +152,11 @@ public class MainActivity extends Activity implements LocationListener{
             catch (NullPointerException e) {
             }
             locationView.setText(finalAddress);
-            getWeather();
             tempView.setText(temperature + "°C ");
+            tempView.setVisibility(View.VISIBLE);
+            locationView.setVisibility(View.VISIBLE);
         }
+        cityBtn.setEnabled(true);
     }
 
 
@@ -190,34 +185,55 @@ public class MainActivity extends Activity implements LocationListener{
     }
 
 
-    //Provides weather data of a city
-    //Mannheim: longitude = 49.4883333, latitude 8.4647222
-    private void getWeather() {
-
+    //Provides weather data of a city. Needs longitude and latitude to excecute task.
+    //Example: Mannheim: longitude = 49.4883333, latitude 8.4647222
+    private class WeatherTask extends AsyncTask<String, Void, String> {
+        @Override
+        protected String doInBackground(String... str) {
+            String response = "";
             weatherclient.getCurrentCondition(new WeatherRequest(map.get("Longitude"), map.get("Latitude")),
                     new WeatherClient.WeatherEventListener() {
                         @Override
                         public void onWeatherRetrieved(CurrentWeather currentWeather) {
                             // Current Weather
-
-                            temperature = (int) currentWeather.weather.temperature.getTemp();
-                            //tempView.setText(temperature + "°C " + "in " + finalAddress);
+                            tmp = (int) currentWeather.weather.temperature.getTemp();
                             Log.d("MainActivity", tempView.getText().toString() + " is the temperature");
+                            cityBtn.setEnabled(true);
+                            tempView.setVisibility(View.VISIBLE);
+                            locationView.setVisibility(View.VISIBLE);
                         }
 
                         @Override
                         public void onWeatherError(WeatherLibException e) {
                             Log.d("MainActivity", "Error WeatherLibException");
+                            cityBtn.setEnabled(true);
                         }
 
 
                         @Override
                         public void onConnectionError(Throwable throwable) {
                             Log.d("MainActivity", "Error Connection");
+                            cityBtn.setEnabled(true);
                         }
                     });
+            return response;
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            cityBtn.setEnabled(true);
+            temperature = tmp;
+            //temperature = (int) currentWeather.weather.temperature.getTemp();
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            cityBtn.setEnabled(false);
 
         }
+    }
+
 
         @Override
         public void onLocationChanged(Location location) {
@@ -238,11 +254,12 @@ public class MainActivity extends Activity implements LocationListener{
         public void onProviderDisabled(String provider) {
 
         }
-    //Get name of selected item in spinner. Put it in and get Object to get lon and lat.
+    //Provides Cities of Enum List with Geo Data.
     private Cities getCity(String name){
         switch (name){
             case "Berlin": return Cities.BERLIN;
             case "Ulm": return Cities.ULM;
+            case "Barcelona": return Cities.BARCELONA;
             case "Biberach": return Cities.BIBERACH;
             default: return Cities.BERLIN;
 
