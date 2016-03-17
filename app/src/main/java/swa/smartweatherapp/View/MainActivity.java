@@ -1,11 +1,14 @@
 package swa.smartweatherapp.View;
 
 import android.app.Activity;
+import android.content.Context;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
@@ -51,6 +54,7 @@ public class MainActivity extends Activity implements LocationListener{
     private static int tmp; //temporary
     private String finalAddress; //location
     private boolean firstSelect=false; //deactivate onItemSelectedListener from beginning
+    private boolean firstBug=false;
 
     protected LocationManager locationManager;
     protected LocationListener locationListener; //not needed for now
@@ -105,8 +109,19 @@ public class MainActivity extends Activity implements LocationListener{
         cityBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                getLocalData();
+                if(isNetworkAvailable()==true){
+                    if(firstBug==false){
+                        //delete after fixed
+                        Toast.makeText(getApplicationContext(),"Small bug. Please click on it 4-5 times :D", Toast.LENGTH_LONG).show();
+                        //
+                        firstBug=true;
                     }
+                    getLocalData();
+                }else{
+                    Toast.makeText(getApplicationContext(),"No signal", Toast.LENGTH_LONG).show();
+                }
+
+            }
                 });
 
         //Changes the date in the layout
@@ -123,6 +138,14 @@ public class MainActivity extends Activity implements LocationListener{
         String formattedDate = df.format(c.getTime());
         dateView.setText(formattedDate);
 
+    }
+
+    //check if network connection is available
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager
+                = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
     }
 
 

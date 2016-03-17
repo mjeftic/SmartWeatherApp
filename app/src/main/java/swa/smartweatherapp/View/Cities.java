@@ -4,9 +4,10 @@ package swa.smartweatherapp.View;
  * Created by Marko on 17.03.16.
  */
 public enum Cities {
-    BERLIN ("Berlin", 23,23),
-    ULM ("Ulm", 23, 22),
-    BIBERACH ("Biberach",11,11);
+    BERLIN("Berlin",52.520007,13.404954),
+    BARCELONA ("Barcelona", 41.385064,2.173403),
+    ULM ("Ulm", 48.401082, 9.987608),
+    BIBERACH ("Biberach",48.095147,9.790152);
 
 
     private String name;
